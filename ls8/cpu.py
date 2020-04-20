@@ -7,7 +7,9 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 8
+        self.reg = [0] * 8
+        self.pc = 0
 
     def load(self):
         """Load a program into memory."""
@@ -59,7 +61,43 @@ class CPU:
             print(" %02X" % self.reg[i], end='')
 
         print()
+    
+    def ram_read(self, pc):
+        return self.ram[pc]
+
+    def ram_write(self, pc, value):
+        self.ram[pc] = value
 
     def run(self):
         """Run the CPU."""
-        pass
+
+        LDI = 0b10000010
+        PRN = 0b01000111
+        HLT = 0b00000001
+
+        running = True
+        while running:
+            inst = self.ram[self.pc]
+
+            # load value into given register
+            if inst == LDI:
+                reg_num = self.ram[self.pc+1]
+                value = self.ram[self.pc+2]
+                self.reg[reg_num] = value
+                self.pc += 3
+
+            # print value in given register
+            elif inst == PRN:
+                reg_num = self.ram[self.pc+1]
+                value = self.reg[reg_num]
+                print(value)
+                self.pc += 2
+
+            # end program
+            elif inst == HLT:
+                running = False
+
+            else:
+                print("Error: Command not found, ending program")
+                running = False
+
