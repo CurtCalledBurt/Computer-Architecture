@@ -7,29 +7,46 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 256
+        self.reg = [0] * 8
+        self.reg[7] = 0xF4
+        self.pc = 0
+        self.prog_end = 0
 
     def load(self):
         """Load a program into memory."""
 
         address = 0
 
-        # For now, we've just hardcoded a program:
+        # get the prgram file name from sys.argv
+        program_filename = sys.argv[1]
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+        # "./" means "in the current directory", which is the folder that our current file is in, which is Computer-Architecture/ls8
+ 
+        f = open(f"./examples/{program_filename}", 'r')
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        for line in f:
+            # process text
+            # split strings on '#' to remove comments from numbers
+            line = line.split('#') # line is now an array
+            # we know the program is the first non-whitespace in each line wherever it appears, so ...
+            # extract the first thing in the line array, and remove whitespace from it
+            line = line[0].strip()
+            # if it is empty, do nothing, move on to next line
+            if line == '':
+                continue
+            
+            # convert the instruction string into a binary integer
+            instruction = int(line, 2)
+            
+            # store the instruction in RAM if there is space
+            if address == self.reg[7]:
+                print("Error: Not enough memory to run the given program")
+            else:
+                self.ram[address] = instruction
+                address += 1
 
+        self.prog_end = address
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -59,7 +76,124 @@ class CPU:
             print(" %02X" % self.reg[i], end='')
 
         print()
+    
+    def ram_read(self, pc):
+        return self.ram[pc]
+
+    def ram_write(self, pc, value):
+        self.ram[pc] = value
 
     def run(self):
         """Run the CPU."""
-        pass
+
+        LDI = 0b10000010
+        PRN = 0b01000111
+        HLT = 0b00000001
+        ADD = 0b10100000
+        MUL = 0b10100010
+        PUSH = 0b01000101
+        POP = 0b01000110
+        RET = 0b00010001
+        CALL = 0b01010000
+
+        SP = self.reg[7]
+
+        running = True
+        while running:
+            inst = self.ram[self.pc]
+
+            inst_len = ((inst & 0b11000000) >> 6) + 1
+
+            ALU = ((inst & 0b00100000) >> 5) 
+
+            # load value into given register
+            if inst == LDI:
+                reg_num = self.ram[self.pc+1]
+                value = self.ram[self.pc+2]
+                self.reg[reg_num] = value
+
+            # print value in given register
+            elif inst == PRN:
+                reg_num = self.ram[self.pc+1]
+                value = self.reg[reg_num]
+                print(value)
+
+            elif inst == ADD:
+                # add 2 numbers together, placing result in the first given register
+                reg_A = self.ram[self.pc+1]
+                reg_B = self.ram[self.pc+1]
+                value = self.reg[reg_A] + self.reg[reg_B]
+                self.reg[reg_A] = value
+
+            elif inst == MUL:
+                # multiply 2 numbers together, placing the result in the first given register
+                reg_num1 = self.ram[self.pc+1]
+                reg_num2 = self.ram[self.pc+2]
+                value1 = self.reg[reg_num1]
+                value2 = self.reg[reg_num2]
+                value3 = value1 * value2
+                self.reg[reg_num1] = value3
+            
+            elif inst == PUSH:
+                # if push would overwrite the program at the bottom of memory, halt and throw an error
+                if self.reg[7] - 1 == self.prog_end:
+                    print("Error: Stack Overflow. Ending Program")
+                    running = False
+                
+                # decrement sp counter, 
+                # place value from given register where the sp is currently pointing
+                else: 
+                    SP -= 1
+                    reg_num = self.ram[self.pc+1]
+                    self.ram[SP] = self.reg[reg_num]
+            
+            elif inst == POP:
+                # if stack is empty:
+                # place value where sp is currently pointing into given register
+                # do NOT increment sp counter
+                if SP == 0xF4:
+                    reg_num = self.ram[self.pc+1]
+                    self.reg[reg_num] = self.ram[SP]
+
+                # if stack has something in it:
+                # place value where sp is currently pointing into the given register,
+                # increment sp counter
+                else:
+                    reg_num = self.ram[self.pc+1]
+                    self.reg[reg_num] = self.ram[SP]
+                    SP += 1
+            
+            elif inst == CALL:
+                # push address of instruction immediately after CALL onto stack
+                SP -= 1
+                func_address = self.pc+2
+                self.ram[SP] = func_address
+
+                # set PC to address in given register
+                reg_r = self.ram[self.pc+1]
+                self.pc = self.reg[reg_r]
+                # we just set the pc to EXACTLY where we want it, but
+                # at the end of the loop we add the instance length to pc. So
+                # We subtract the instance length here to undo that.
+                self.pc -= inst_len
+
+            # return from subroutine
+            elif inst == RET:
+                where_we_left_off = self.ram[SP]
+                self.pc = where_we_left_off
+                SP += 1
+                # pc is set to EXACTLY where we want it, but at the end
+                # of the loop we add the instance length to pc. So we 
+                # subtract the inst_len from pc to counteract that.
+                self.pc -= inst_len
+
+            # end program
+            elif inst == HLT:
+                running = False
+
+            else:
+                print(f"Error: Command '{bin(inst)}' not found, ending program")
+                running = False
+            
+            self.pc += inst_len
+
