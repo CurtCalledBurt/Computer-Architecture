@@ -39,9 +39,12 @@ class CPU:
             # convert the instruction string into a binary integer
             instruction = int(line, 2)
             
-            # store the instruction in RAM
-            self.ram[address] = instruction
-            address += 1
+            # store the instruction in RAM if there is space
+            if address == self.reg[7]:
+                print("Error: Not enough memory to run the given program")
+            else:
+                self.ram[address] = instruction
+                address += 1
 
         self.prog_end = address
 
@@ -86,9 +89,14 @@ class CPU:
         LDI = 0b10000010
         PRN = 0b01000111
         HLT = 0b00000001
+        ADD = 0b10100000
         MUL = 0b10100010
         PUSH = 0b01000101
         POP = 0b01000110
+        RET = 0b00010001
+        CALL = 0b01010000
+
+        SP = self.reg[7]
 
         running = True
         while running:
@@ -110,6 +118,13 @@ class CPU:
                 value = self.reg[reg_num]
                 print(value)
 
+            elif inst == ADD:
+                # add 2 numbers together, placing result in the first given register
+                reg_A = self.ram[self.pc+1]
+                reg_B = self.ram[self.pc+1]
+                value = self.reg[reg_A] + self.reg[reg_B]
+                self.reg[reg_A] = value
+
             elif inst == MUL:
                 # multiply 2 numbers together, placing the result in the first given register
                 reg_num1 = self.ram[self.pc+1]
@@ -128,32 +143,56 @@ class CPU:
                 # decrement sp counter, 
                 # place value from given register where the sp is currently pointing
                 else: 
-                    self.reg[7] -= 1
+                    SP -= 1
                     reg_num = self.ram[self.pc+1]
-                    self.ram[self.reg[7]] = self.reg[reg_num]
+                    self.ram[SP] = self.reg[reg_num]
             
             elif inst == POP:
                 # if stack is empty:
                 # place value where sp is currently pointing into given register
                 # do NOT increment sp counter
-                if self.reg[7] == 0xF4:
+                if SP == 0xF4:
                     reg_num = self.ram[self.pc+1]
-                    self.reg[reg_num] = self.ram[self.reg[7]]
+                    self.reg[reg_num] = self.ram[SP]
 
                 # if stack has something in it:
                 # place value where sp is currently pointing into the given register,
                 # increment sp counter
                 else:
                     reg_num = self.ram[self.pc+1]
-                    self.reg[reg_num] = self.ram[self.reg[7]]
-                    self.reg[7] += 1
+                    self.reg[reg_num] = self.ram[SP]
+                    SP += 1
+            
+            elif inst == CALL:
+                # push address of instruction immediately after CALL onto stack
+                SP -= 1
+                func_address = self.pc+2
+                self.ram[SP] = func_address
+
+                # set PC to address in given register
+                reg_r = self.ram[self.pc+1]
+                self.pc = self.reg[reg_r]
+                # we just set the pc to EXACTLY where we want it, but
+                # at the end of the loop we add the instance length to pc. So
+                # We subtract the instance length here to undo that.
+                self.pc -= inst_len
+
+            # return from subroutine
+            elif inst == RET:
+                where_we_left_off = self.ram[SP]
+                self.pc = where_we_left_off
+                SP += 1
+                # pc is set to EXACTLY where we want it, but at the end
+                # of the loop we add the instance length to pc. So we 
+                # subtract the inst_len from pc to counteract that.
+                self.pc -= inst_len
 
             # end program
             elif inst == HLT:
                 running = False
 
             else:
-                print("Error: Command not found, ending program")
+                print(f"Error: Command '{bin(inst)}' not found, ending program")
                 running = False
             
             self.pc += inst_len
