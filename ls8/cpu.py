@@ -9,8 +9,9 @@ class CPU:
         """Construct a new CPU."""
         self.ram = [0] * 256
         self.reg = [0] * 8
+        self.reg[7] = 0xF4
         self.pc = 0
-        self.sp = 0xF4
+        self.prog_end = 0
 
     def load(self):
         """Load a program into memory."""
@@ -41,6 +42,8 @@ class CPU:
             # store the instruction in RAM
             self.ram[address] = instruction
             address += 1
+
+        self.prog_end = address
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -117,27 +120,33 @@ class CPU:
                 self.reg[reg_num1] = value3
             
             elif inst == PUSH:
+                # if push would overwrite the program at the bottom of memory, halt and throw an error
+                if self.reg[7] - 1 == self.prog_end:
+                    print("Error: Stack Overflow. Ending Program")
+                    running = False
+                
                 # decrement sp counter, 
-                # place value from given register where the sp is currently pointing 
-                self.sp -= 1
-                reg_num = self.ram[self.pc+1]
-                self.ram[self.sp] = self.reg[reg_num]
+                # place value from given register where the sp is currently pointing
+                else: 
+                    self.reg[7] -= 1
+                    reg_num = self.ram[self.pc+1]
+                    self.ram[self.reg[7]] = self.reg[reg_num]
             
             elif inst == POP:
                 # if stack is empty:
                 # place value where sp is currently pointing into given register
                 # do NOT increment sp counter
-                if self.sp == 0xF4:
+                if self.reg[7] == 0xF4:
                     reg_num = self.ram[self.pc+1]
-                    self.reg[reg_num] = self.ram[self.sp]
+                    self.reg[reg_num] = self.ram[self.reg[7]]
 
                 # if stack has something in it:
                 # place value where sp is currently pointing into the given register,
                 # increment sp counter
                 else:
                     reg_num = self.ram[self.pc+1]
-                    self.reg[reg_num] = self.ram[self.sp]
-                    self.sp += 1
+                    self.reg[reg_num] = self.ram[self.reg[7]]
+                    self.reg[7] += 1
 
             # end program
             elif inst == HLT:
