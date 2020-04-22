@@ -124,11 +124,20 @@ class CPU:
                 self.ram[self.sp] = self.reg[reg_num]
             
             elif inst == POP:
+                # if stack is empty:
+                # place value where sp is currently pointing into given register
+                # do NOT increment sp counter
+                if self.sp == 0xF4:
+                    reg_num = self.ram[self.pc+1]
+                    self.reg[reg_num] = self.ram[self.sp]
+
+                # if stack has something in it:
                 # place value where sp is currently pointing into the given register,
                 # increment sp counter
-                reg_num = self.ram[self.pc+1]
-                self.reg[reg_num] = self.ram[self.sp]
-                self.sp += 1
+                else:
+                    reg_num = self.ram[self.pc+1]
+                    self.reg[reg_num] = self.ram[self.sp]
+                    self.sp += 1
 
             # end program
             elif inst == HLT:
